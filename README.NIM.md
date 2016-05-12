@@ -22,6 +22,8 @@ proc query*(query: string) =
     let desc = item["description"][0].str
     let url = item["homepage"][0].str
     result.addItem(title, desc, "Images\\exe.png", "openUrl", url, false)
+  # sort results
+  result.sort(query)
   # print results json
   echo result.results()
   

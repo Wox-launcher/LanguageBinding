@@ -1,7 +1,7 @@
-import json, marshal, tables, os
+import json, marshal, tables, os, algorithm, strutils, sequtils
 
 ## Helper library for Wox plugin authors
-## Version 0.2.0
+## Version 0.3.0
 ## roose 2016
 
 type
@@ -24,19 +24,20 @@ type
 
   RpcProc* = proc (params: string)
 
+type
+  SortBy* = enum
+    ## Sort by title or subtitle or title and subtitle
+    byTitle, bySub, byTitleSub
+
 # name, proc table for call proc
 var procs: Table[string, RpcProc] = initTable[string, RpcProc]()
 
 proc register*(name: string, prc: RpcProc) =
   ## Register proc as name
-  ## :param string name: name to register proc
-  ## :param proc prc: proc
   procs[name] = prc
 
 proc call*(name, params: string) =
   ## Call proc by it's name
-  ## :param string name: proc name
-  ## :param string params: proc parameters
   procs[name](params)
 
 proc run*() =
@@ -53,13 +54,6 @@ proc newResult*(): WoxResult =
 
 proc addItem*(self: var WoxResult, title, sub, icon, `method`, params: string, hide: bool = true) =
   ## Add item to the return list
-  ##
-  ## :param str title: item title
-  ## :param str sub: item subtitle
-  ## :param str icon: path to item icon
-  ## :param str method: a function called when an item is selected
-  ## :param list params: parameters for callable function
-  ## :param str hide: hide Wox after select item or not
 
   self.result.add(WoxItem(
                     Title: title,
@@ -75,3 +69,31 @@ proc addItem*(self: var WoxResult, title, sub, icon, `method`, params: string, h
 proc results*(self: var WoxResult): string =
   ## Return results with all items
   return $$self
+
+proc sort*(self: var WoxResult, query: string, sortBy = byTitleSub) =
+  ## Fuzzy sorting the results, default sorted by title and subtitle
+
+  proc score(value: string): float =
+    ## Calculate score
+
+    var score = 0.0
+    if value.toLower.startsWith(query):
+      score = 100.0 - (value.len / query.len)
+    elif query in value.toLower:
+      score = 80.0 - (value.len / query.len)
+    return score
+
+  self.result.sort(
+    proc(x, y: WoxItem) :int =
+      var text: array[0..1, string]
+      case sortBy:
+        of byTitle:
+          text = [x.Title, y.Title]
+        of bySub:
+          text = [x.SubTitle, y.SubTitle]
+        of byTitleSub:
+          text = [x.Title & " " & x.SubTitle, y.Title & " " & y.SubTitle]
+        else:
+          text = [x.Title & " " & x.SubTitle, y.Title & " " & y.SubTitle]
+      cmp(score(text[0]), score(text[1])), SortOrder.Descending
+  )
